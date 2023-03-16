@@ -1,11 +1,21 @@
 package org.apache.maven.plugin.surefire.report;
 
-import org.apache.maven.surefire.api.report.ReportEntry;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static java.util.Collections.synchronizedMap;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.BiFunction;
 
-import static java.util.Collections.*;
+import org.apache.maven.plugin.surefire.log.api.ConsoleLogger;
+import org.apache.maven.surefire.api.report.ReportEntry;
 
 public class TestReportHandler {
 
@@ -17,15 +27,17 @@ public class TestReportHandler {
     private final ReportEntry report;
     private final TestSetStats testSetStats;
     private final String sourceRootName;
+    private final ConsoleLogger logger;
 
-    public TestReportHandler(ReportEntry report, TestSetStats testSetStats) {
+    public TestReportHandler(ConsoleLogger consoleLogger, ReportEntry report, TestSetStats testSetStats) {
         this.report = report;
         this.testSetStats = testSetStats;
         this.sourceRootName = getSourceRootName();
+        logger= consoleLogger;
     }
 
-    public TestReportHandler(ReportEntry report) {
-        this(report, null);
+    public TestReportHandler(ConsoleLogger consoleLogger, ReportEntry report) {
+        this(consoleLogger, report, null);
     }
 
     public void prepare() {
@@ -35,12 +47,20 @@ public class TestReportHandler {
     }
 
     public void print(BiFunction<List<WrappedReportEntry>,List<WrappedReportEntry>, TreePrinter> getTreePrinter) {
+    	// FIXME: aquí parece estar el problema
         if (isMarkedAsNestedTest()) {
+        	logger.info("Printing nested: "+report);
+        	logger.info("Class names: "+classNames);
+        	logger.info("Class entries: "+classEntries);
+        	logger.info("Test entries: "+testEntries);
+        	
             prepareEntriesForNestedTests();
             if (isNestedTestReadyToPrint()) {
+            	logger.info("Printing nested ready: "+testSetStats);
                 printNestedTests(getTreePrinter);
             }
         } else {
+        	logger.info("Printing un-nested: "+report);
             printTests(getTreePrinter);
         }
     }
@@ -68,7 +88,11 @@ public class TestReportHandler {
     }
 
     private void prepareTestEntriesForNestedTest() {
-        testEntries.putIfAbsent(sourceRootName, new ArrayList<>(testSetStats.getReportEntries()));
+        testEntries.putIfAbsent(sourceRootName, new ArrayList<>());
+        testEntries.computeIfPresent(sourceRootName, (k,v)->{
+        	v.addAll(testSetStats.getReportEntries());
+        	return v;
+        });
     }
 
     private List<WrappedReportEntry> getTestEntryList() {
